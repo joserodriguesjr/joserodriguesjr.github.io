@@ -24,7 +24,7 @@ title: Jose Rodrigues # the main title
 tagline: Writing tech things I like # it will display as the subtitle
 
 description: >- # used by seo meta and the atom feed
-  A blog talking about C, C++, Rust, Linux, Embedded, Firmware, Java, Python, Software and other tech stuff
+  A blog talking about web development, embedded systems and other stuff abouth technology
 
 # Fill in the protocol & hostname for your site.
 # E.g. 'https://username.github.io', note that it does not end with a '/'.
@@ -66,7 +66,7 @@ analytics:
   google:
     id: # fill in your Google Analytics ID
   goatcounter:
-    id: # fill in your GoatCounter ID
+    id: "joserodriguesjr"
   umami:
     id: # fill in your Umami ID
     domain: # fill in your Umami domain
@@ -80,7 +80,7 @@ analytics:
 
 # Page views settings
 pageviews:
-  provider: # now only supports 'goatcounter'
+  provider: "goatcounter"
 
 # Prefer color scheme setting.
 #
@@ -103,7 +103,7 @@ theme_mode: # [light | dark]
 cdn:
 
 # the avatar on sidebar, support local or CORS resources
-avatar: "assets/img/avatar.jpeg"
+avatar: "assets/img/avatar.png"
 
 # The URL of the site-wide social preview image used in SEO `og:image` meta tag.
 # It can be overridden by a customized `page.image` in front matter.
@@ -114,10 +114,10 @@ toc: true
 
 comments:
   # Global switch for the post-comment system. Keeping it empty means disabled.
-  provider: # [disqus | utterances | giscus]
+  provider: "disqus" # [disqus | utterances | giscus]
   # The provider options are as follows:
   disqus:
-    shortname: # fill with the Disqus shortname. › https://help.disqus.com/en/articles/1717111-what-s-a-shortname
+    shortname: "joserodriguesjr" # › https://help.disqus.com/en/articles/1717111-what-s-a-shortname
   # utterances settings › https://utteranc.es/
   utterances:
     repo: # <gh-username>/<repo>

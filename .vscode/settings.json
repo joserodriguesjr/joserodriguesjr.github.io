@@ -26,5 +26,14 @@
   // Run tasks in macOS
   "terminal.integrated.profiles.osx": {
     "zsh": { "path": "/bin/zsh", "args": ["-l", "-i"] }
-  }
+  },
+  "spellright.language": [
+    "en_US"
+  ],
+  "spellright.documentTypes": [
+    "latex",
+    "plaintext",
+    "markdown",
+    "md"
+  ]
 }
