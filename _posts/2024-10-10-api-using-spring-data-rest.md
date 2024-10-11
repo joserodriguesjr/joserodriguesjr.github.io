@@ -89,24 +89,14 @@ If we had more databases we could split into a third layer *infrastructure* that
     │   │   └── RestConfiguration
     │   └── AdoptionApplication
     └── resources/
-        └── application.yml
-```
-
-## Testing
-
-To ensure our API is working as intended, firstly we’re going to write some test cases
-
-### CRUD Operations
-
-```java
-```
-
-### Status modification
-
-```java
+        └── application-dev.yml
 ```
 
 ## Configuration
+
+### Active Profile
+
+Make sure to add "dev" as an active profile in your IDE configuration
 
 ### Gradle
 
@@ -124,11 +114,12 @@ dependencies {
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testRuntimeOnly 'com.h2database:h2'
 }
 ```
 {: file="build.gradle" }
 
-### Application properties
+### Application Properties for Dev
 
 The application properties for our project:
 
@@ -162,9 +153,8 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
-
 ```
-{: file="resources/application.yml" }
+{: file="resources/application-dev.yml" }
 
 ### Postgres in Docker
 
@@ -181,6 +171,106 @@ services:
       POSTGRES_DB: adoption
 ```
 {: file="compose.yml" }
+
+## Testing
+
+To ensure our API is working as intended, we’re going to write some test cases.
+
+### Application Properties for Test
+
+We're using H2 in memory db for testing. That way we don't need to mock the services and it gets cleaned after execution.
+
+*Create the file inside the test's resources folder*
+
+```yml
+spring:
+  datasource:
+    url: jdbc:h2:mem:public;DB_CLOSE_DELAY=-1;NON_KEYWORDS=KEY,VALUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: true
+    defer-datasource-initialization: true
+    hibernate:
+      ddl-auto: create
+  sql:
+    init:
+      mode: always
+```
+{: file="resources/application-test.yml" }
+
+### CRUD Operations
+
+```java
+
+```
+
+### Status modification
+
+For testing if _updateStatus_ is working as intended, we will a test for the _AnimalService_
+
+#### Setting up
+
+```java
+@SpringBootTest
+public class AnimalServiceTest {
+
+    @Autowired
+    private AnimalRepository animalRepository;
+
+    @Autowired
+    private AnimalService animalService;
+
+    private Animal animal;
+
+    @BeforeEach
+    public void setUp() {
+        animal = new Animal();
+        animal.setId(1L);
+        animal.setName("Bobby");
+        animal.setDescription("Cute dog");
+        animal.setImageURL("https://image.com/bobby");
+        animal.setCategory("Dog");
+        animal.setBirthDate(LocalDate.of(2020, 1, 1));
+        animal.setStatus(Animal.Status.DISPONIVEL);
+        animalRepository.save(animal);
+    }
+```
+
+#### Testing updateStatus functionality
+
+```java
+@Test
+    public void testUpdateStatus() {
+        // Arrange
+        Animal.Status newStatus = Animal.Status.ADOTADO;
+
+        // Act
+        Animal updatedAnimal = animalService.updateStatus(animal.getId(), newStatus);
+
+        // Assert
+        assertEquals(newStatus, updatedAnimal.getStatus());
+        assertEquals(animal.getId(), updatedAnimal.getId());
+    }
+```
+
+#### Testing updateStatus exception
+
+```java
+@Test
+    public void testUpdateStatus_AnimalNotFound() {
+        // Arrange
+        Long nonExistentId = 999L;
+        Animal.Status newStatus = Animal.Status.ADOTADO;
+
+        // Act & Assert
+        assertThrows(EntityNotFoundException.class, () -> {
+            animalService.updateStatus(nonExistentId, newStatus);
+        });
+    }
+```
 
 ## Entity
 
@@ -252,7 +342,7 @@ public interface AnimalRepository extends JpaRepository<Animal, Long> {}
 
 ## Status Endpoint
 
-Now that all our CRUD endpoints are correctly configured, we're going to make our custom endpoint to change the animal status. It will receive a JSON form including only the new status value.
+Now that all our CRUD endpoints are correctly configured, we're going to make our PATCH endpoint to change the animal status. It will receive a JSON form including only the new status value.
 
 ### Controller
 
@@ -266,12 +356,18 @@ public class AnimalController {
 
     private AnimalService animalService;
 
-    @PutMapping(path= "/{id}/status", consumes = "application/json", produces = "application/json")
+    @PatchMapping(path= "/{id}/status", consumes = "application/json", produces = "application/json")
     public ResponseEntity<Animal> updateStatus(
             @PathVariable(value = "id") Long id,
             @RequestBody UpdateAnimalStatusForm statusForm) {
         Animal.Status status = statusForm.status();
-        return ResponseEntity.status(HttpStatus.CREATED).body(animalService.updateStatus(id, status));
+
+        try {
+            Animal updatedAnimal = animalService.updateStatus(id, status);
+            return ResponseEntity.ok(updatedAnimal);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
     }
 }
 ```
@@ -302,7 +398,7 @@ public class AnimalService {
     private final AnimalRepository animalRepository;
 
     public Animal updateStatus(Long id, Animal.Status status) {
-        Animal animal = animalRepository.findById(id).orElseThrow();
+        Animal animal = animalRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         animal.setStatus(status);
         return animalRepository.save(animal);
     };
