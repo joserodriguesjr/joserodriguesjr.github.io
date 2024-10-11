@@ -458,7 +458,7 @@ In this project you learned how to:
 - Hide fields from POST request 
 - Create a custom projection
 - Generate Swagger docs
-- Using Postgres with Docker
+- Use PostgreSQL with Docker
 - Write tests for our application
 - Use H2 as our database for tests 
 
