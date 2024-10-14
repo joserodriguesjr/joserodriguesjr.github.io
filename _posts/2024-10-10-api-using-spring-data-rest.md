@@ -121,7 +121,7 @@ dependencies {
 ```
 {: file="build.gradle" }
 
-### Application Properties for Dev
+### Application Properties
 
 The application properties for our project:
 
@@ -158,21 +158,67 @@ springdoc:
 ```
 {: file="resources/application-dev.yml" }
 
-### Postgres in Docker
+### Docker
 
-Heres our *compose.yml* with PostgreSQL docker configuration
+Heres our *Dockerfile*, *compose.yml* and *.dockerignore*
+
+```Dockerfile
+#Build stage
+FROM gradle:8.10.2-jdk21 AS build
+WORKDIR /app
+COPY . .
+RUN gradle build
+# Package stage
+FROM openjdk:21-jdk-slim
+WORKDIR /app
+COPY --from=build /app/build/libs/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+{: file="Dockerfile" }
+
 ```yml
 services:
   postgres:
     image: 'postgres:latest'
+    container_name: postgres
     ports:
       - '5432:5432'
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: root
       POSTGRES_DB: adoption
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '8080:8080'
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+
 ```
 {: file="compose.yml" }
+
+```
+.gradle
+.idea
+build
+out
+src/test
+```
+{: file=".dockerignore" }
+
+And create a new _application-docker.yml_, changing the _spring.datasource.url_ from "jdbc:postgresql://localhost:5432/adoption" to "jdbc:postgresql://postgres:5432/adoption"
 
 ## Entity
 
@@ -353,108 +399,7 @@ If you enter *http://localhost:8080/swagger-ui/index.html#/* in your browser, yo
 ![Desktop View](/assets/img/posts/2024-10-10/swagger.png)
 _Swagger documentation_
 
-## Testing
-
-To ensure our API is working as intended, we’re going to write some test cases.
-
-### Application Properties for Test
-
-We're using H2 in memory db for testing. That way we don't need to mock the services and it gets cleaned after execution.
-
-*Create the file inside the test's resources folder*
-
-```yml
-spring:
-  datasource:
-    url: jdbc:h2:mem:public;DB_CLOSE_DELAY=-1;NON_KEYWORDS=KEY,VALUE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: password
-  jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
-    show-sql: true
-    defer-datasource-initialization: true
-    hibernate:
-      ddl-auto: create
-  sql:
-    init:
-      mode: always
-```
-{: file="resources/application-test.yml" }
-
-### CRUD Operations
-
-```java
-
-
-```
-
-### Status modification
-
-For testing if _updateStatus_ is working as intended, we will write a test for the _AnimalService_ inside the _test_ package.
-
-#### Setting up
-
-```java
-@SpringBootTest
-public class AnimalServiceTest {
-
-    @Autowired
-    private AnimalRepository animalRepository;
-
-    @Autowired
-    private AnimalService animalService;
-
-    private Animal animal;
-
-    @BeforeEach
-    public void setUp() {
-        animal = new Animal();
-        animal.setId(1L);
-        animal.setName("Bobby");
-        animal.setDescription("Cute dog");
-        animal.setImageURL("https://image.com/bobby");
-        animal.setCategory("Dog");
-        animal.setBirthDate(LocalDate.of(2020, 1, 1));
-        animal.setStatus(Animal.Status.DISPONIVEL);
-        animalRepository.save(animal);
-    }
-```
-
-#### Testing updateStatus functionality
-
-```java
-@Test
-    public void testUpdateStatus() {
-        // Arrange
-        Animal.Status newStatus = Animal.Status.ADOTADO;
-
-        // Act
-        Animal updatedAnimal = animalService.updateStatus(animal.getId(), newStatus);
-
-        // Assert
-        assertEquals(newStatus, updatedAnimal.getStatus());
-        assertEquals(animal.getId(), updatedAnimal.getId());
-    }
-```
-
-#### Testing updateStatus exception
-
-```java
-@Test
-    public void testUpdateStatus_AnimalNotFound() {
-        // Arrange
-        Long nonExistentId = 999L;
-        Animal.Status newStatus = Animal.Status.ADOTADO;
-
-        // Act & Assert
-        assertThrows(EntityNotFoundException.class, () -> {
-            animalService.updateStatus(nonExistentId, newStatus);
-        });
-    }
-```
-
-## Bonus: Data Validation
+## Input Validation
 
 ### Status - Wrong Enum
 
@@ -587,6 +532,100 @@ And add this new method to handle the _ConstraintViolationException_ to our _Cus
 
 Now, when sending a POST request with wrong data, we will receive a nice message informing what's wrong.
 
+## Testing
+
+To ensure our API is working as intended, we’re going to write some test cases.
+
+### Application Properties for Test
+
+We're using H2 in memory db for testing. That way we don't need to mock the services and it gets cleaned after execution.
+
+*Create the file inside the test's resources folder*
+
+```yml
+spring:
+  datasource:
+    url: jdbc:h2:mem:public;DB_CLOSE_DELAY=-1;NON_KEYWORDS=KEY,VALUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: true
+    defer-datasource-initialization: true
+    hibernate:
+      ddl-auto: create
+  sql:
+    init:
+      mode: always
+```
+{: file="resources/application-test.yml" }
+
+### Status modification
+
+For testing if _updateStatus_ is working as intended, we will write a test for the _AnimalService_ inside the _test_ package.
+
+#### Setting up
+
+```java
+@SpringBootTest
+public class AnimalServiceTest {
+
+    @Autowired
+    private AnimalRepository animalRepository;
+
+    @Autowired
+    private AnimalService animalService;
+
+    private Animal animal;
+
+    @BeforeEach
+    public void setUp() {
+        animal = new Animal();
+        animal.setId(1L);
+        animal.setName("Bobby");
+        animal.setDescription("Cute dog");
+        animal.setImageURL("https://image.com/bobby");
+        animal.setCategory("Dog");
+        animal.setBirthDate(LocalDate.of(2020, 1, 1));
+        animal.setStatus(Animal.Status.DISPONIVEL);
+        animalRepository.save(animal);
+    }
+```
+
+#### Testing updateStatus functionality
+
+```java
+@Test
+    public void testUpdateStatus() {
+        // Arrange
+        Animal.Status newStatus = Animal.Status.ADOTADO;
+
+        // Act
+        Animal updatedAnimal = animalService.updateStatus(animal.getId(), newStatus);
+
+        // Assert
+        assertEquals(newStatus, updatedAnimal.getStatus());
+        assertEquals(animal.getId(), updatedAnimal.getId());
+    }
+```
+
+#### Testing updateStatus exception
+
+```java
+@Test
+    public void testUpdateStatus_AnimalNotFound() {
+        // Arrange
+        Long nonExistentId = 999L;
+        Animal.Status newStatus = Animal.Status.ADOTADO;
+
+        // Act & Assert
+        assertThrows(EntityNotFoundException.class, () -> {
+            animalService.updateStatus(nonExistentId, newStatus);
+        });
+    }
+```
+
 ## What we learned?
 
 In this project you learned how to:
@@ -596,7 +635,7 @@ In this project you learned how to:
 - Write custom error messages to avoid API exposition
 - Create a custom projection
 - Generate Swagger docs
-- Use PostgreSQL with Docker
+- Use PostgreSQL with Docker Compose
 - Write tests for our application
 - Use H2 as our database for tests 
 
